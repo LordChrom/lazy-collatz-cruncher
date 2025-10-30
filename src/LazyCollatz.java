@@ -24,12 +24,11 @@ public class LazyCollatz {
 		lowerBytes = 0;
 	}
 
-    public static LazyCollatz solve(BigInteger num) {
+    public static void solve(BigInteger num) {
 		LazyCollatz ret = new LazyCollatz(num,Integer.MAX_VALUE);
 		ret.topInstance=true;
-		ret.mult=BigInteger.ZERO; //dont need to keep track of upstream changes for top leve, saves lotsa perf
+		ret.mult=BigInteger.ZERO; //dont need to keep track of upstream changes for top level, saves a LOT of cycles
 		ret.topSolve();
-		return ret;
 	}
 
 	private void topSolve() {
@@ -39,7 +38,12 @@ public class LazyCollatz {
 		long startTime = System.currentTimeMillis();
 		long reportTime = startTime+statusUpdatePeriod;
 
+		evenSteps = n.getLowestSetBit(); //initial trailing zeroes
+		if(evenSteps>0)
+			n = n.shiftRight((int)evenSteps);
+
 		while(!n.equals(BigInteger.ONE)) {
+			//reporting
 			long time = System.currentTimeMillis();
 			if(time>reportTime){
 				statusUpdatePeriod+=1000;
@@ -48,115 +52,97 @@ public class LazyCollatz {
 						+ NumberFormat.getIntegerInstance().format(n.bitLength())+
 						"  Steps: "+NumberFormat.getIntegerInstance().format(oddSteps+evenSteps));
 			}
+
 			bitBudget=Integer.MAX_VALUE;
-			partialSolve();
+
+			//the actual solve
+			if(n.bitLength()>5000) //tune this
+				partialSolveBig();
+			else
+				partialSolveSmall();
 		}
 	}
 
-	private void solve(){
-		while(bitBudget>0&&!n.equals(BigInteger.ONE))
-			partialSolve();
+	private void subSolve(){
+		while(bitBudget>0) {
+			if(n.equals(BigInteger.ONE)){
+				LazyCollatz manualStep = new LazyCollatz(BigInteger.ONE,0);
+				manualStep.mult=BigInteger.valueOf(3);
+				oddSteps++;
+				incorporate(manualStep);
+			}
+
+			if (bitBudget > 700) //tune this
+				partialSolveBig();
+			else
+				partialSolveSmall();
+		}
 	}
 
-	//solves by choosing a strategy
-	private void partialSolve(){
-		if(n.equals(BigInteger.ZERO)){ //if lower bites are all zero, shift right for whole budget
-			shr+=bitBudget;
-			evenSteps+=bitBudget;
-			bitBudget=0;
-			return;
-		}
-
-		int x = Math.min(n.getLowestSetBit(),bitBudget); //trailing zeroes
-
-		if(x>0) {
-			n = n.shiftRight(x);
-			if(!topInstance)
-				bitBudget -= x;
-			shr += x;
-			evenSteps += x;
-
-			if(bitBudget==0) return;
-		}
-
-		if(bitBudget>700 && n.bitLength()>700) //tune this
-			partialSolveBig();
-		else
-			partialSolveSmall();
-	}
 
 	//solves by solving a subproblem large enough to need chopping
 	private void partialSolveBig(){
 		BigInteger subN = chop();
-		while(subN.equals(BigInteger.ONE)){
-			if(n.equals(BigInteger.ONE))
-				break;
 
-			LazyCollatz manualStep = new LazyCollatz(BigInteger.ONE,0);
-			manualStep.mult=BigInteger.valueOf(3);
-			oddSteps++;
-			incorporate(manualStep);
-			subN = chop();
-		}
-
-		LazyCollatz ret = new LazyCollatz(subN,Math.min(subN.bitLength(),bitBudget));
-		ret.solve();
+		LazyCollatz ret = new LazyCollatz(subN,Math.min(lowerBytes*8,bitBudget));
+		ret.subSolve();
 		incorporate(ret);
 	}
 
 	//constants for how many bits to use in the small solver
-	private static final int smallBitSize = 38;
+	private static final int smallBitSize = 32; //max 39 so add doesn't overflow
 	private static final long smallBitMask = (1L<<smallBitSize)-1;
 
 	//solves by solving a subproblem small enough to do iteratively
 	private void partialSolveSmall(){
-		while(!n.equals(BigInteger.ONE) && bitBudget>0) {
+		while(!(n.equals(BigInteger.ONE)&&topInstance) && bitBudget>0) {
 			long x = n.longValue() & smallBitMask;
 
 			long add = 0, mult = 1;
 			int shr = 0;
 			int limit = Math.min(bitBudget, smallBitSize);
-			if(x==0)
-				shr=limit;
-			while ((shr < limit) && (add<=0x3fffffffffffffffL) && (x > 0L) ){
-				if ((x & 1) == 0) {
-					x >>= 1;
-					shr++;
-				} else {
-					if (x == 1L && topInstance)
-						break;
-					x = x * 3 + 1;
-					mult *= 3;
-					add = add * 3 + (1L << shr);
-					oddSteps++;
-				}
+
+			while (x > 0L && (shr<limit) && !(x == 1L && topInstance)){
+				//we always have an odd step to start with
+				x = x * 3 + 1;
+				mult *= 3;
+				add = add * 3 + (1L << shr);
+				oddSteps++;
+
+				//then some number of even steps
+				int trail = Math.min(limit - shr, Long.numberOfTrailingZeros(x));
+
+				x >>= trail;
+				shr += trail;
 			}
 
-			evenSteps+=shr;
 
-			//shorter version of the incorporate function
-			BigInteger bigimul = BigInteger.valueOf(mult);
-			this.mult = this.mult.multiply(bigimul);
-			bitBudget-=shr;
-			this.shr += shr;
-			n = n.multiply(bigimul).add(BigInteger.valueOf(add)).shiftRight(shr);
+			//shorter version of the incorporate function, with special stuff to auto align to the right
+			BigInteger bigmul = BigInteger.valueOf(mult);
+			this.mult = this.mult.multiply(bigmul);
+			n = n.multiply(bigmul).add(BigInteger.valueOf(add));
+
+			int trail = Math.min(n.getLowestSetBit(),bitBudget); //trailing zeroes (also handles the rsh)
+			evenSteps+=trail;
+			bitBudget-=trail;
+			this.shr += trail;
+			n=n.shiftRight(trail);
 		}
 	}
 
 	//splits off an appropriate amount of the lower bits of a number for smaller computation
 	private BigInteger chop(){
-		byte[] bytes = n.toByteArray();
-		int len = bytes.length;
+		byte[] srcBytes = n.toByteArray();
+		int len = srcBytes.length;
 		
-		lowerBytes =(int)(len*0.45f);
+		lowerBytes=(int)(len*0.45f); //tune this
 
 		byte[] choppedBytes = new byte[lowerBytes +1];
 		byte[] remainingBytes = new byte[len- lowerBytes];
-		
-		System.arraycopy(bytes,bytes.length- lowerBytes,choppedBytes,1, lowerBytes);
-		System.arraycopy(bytes,0,remainingBytes,0,len- lowerBytes);
 
-		choppedBytes[0]=0;
+		System.arraycopy(srcBytes,srcBytes.length- lowerBytes,choppedBytes,1, lowerBytes);
+		System.arraycopy(srcBytes,0,remainingBytes,0,len- lowerBytes);
+
 
 		n = new BigInteger(remainingBytes);
 		return new BigInteger(choppedBytes);
@@ -170,5 +156,15 @@ public class LazyCollatz {
 		shr += sub.shr;
 
 		n=n.parallelMultiply(sub.mult).shiftLeft(lowerBytes *8-sub.shr).add(sub.n);
+
+		int trail = Math.min(n.getLowestSetBit(),bitBudget); //trailing zeroes
+		if(trail==0) return;
+
+		n = n.shiftRight(trail);
+		this.shr += trail;
+		evenSteps += trail;
+
+		if(!topInstance)
+			bitBudget -= trail;
 	}
 }
