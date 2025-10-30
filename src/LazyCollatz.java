@@ -3,6 +3,7 @@ import java.text.NumberFormat;
 
 public class LazyCollatz {
 	public static long oddSteps, evenSteps;
+	public static boolean printProgress = true;
 
 	//any number of collatz steps can be combined into a single function of the form (x*mult+add) >> shf
 	//the "add" factor can be found directly from the result of the sub calculation
@@ -44,13 +45,15 @@ public class LazyCollatz {
 
 		while(!n.equals(BigInteger.ONE)) {
 			//reporting
-			long time = System.currentTimeMillis();
-			if(time>reportTime){
-				statusUpdatePeriod+=1000;
-				reportTime=time+statusUpdatePeriod;
-				System.out.println(" - solving... t="+(time-startTime)/1000+"s. Bits: "
-						+ NumberFormat.getIntegerInstance().format(n.bitLength())+
-						"  Steps: "+NumberFormat.getIntegerInstance().format(oddSteps+evenSteps));
+			if(printProgress) {
+				long time = System.currentTimeMillis();
+				if (time > reportTime) {
+					statusUpdatePeriod += 1000;
+					reportTime = time + statusUpdatePeriod;
+					System.out.println(" - solving... t=" + (time - startTime) / 1000 + "s. Bits: "
+							+ NumberFormat.getIntegerInstance().format(n.bitLength()) +
+							"  Steps: " + NumberFormat.getIntegerInstance().format(oddSteps + evenSteps));
+				}
 			}
 
 			bitBudget=Integer.MAX_VALUE;

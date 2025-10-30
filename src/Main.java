@@ -4,8 +4,8 @@ import java.text.NumberFormat;
 public class Main {
 	public static void main(String[] args) {
 		if(args.length==0){
-			timedSolve("10^(10^6)"); //17,805,058, 0.34sec
-			timedSolve("3^10^7<<3*9^9"); //1,276,807,624, 3.42sec   (canonically 8^9^9*3^10^7)
+			detailedSolve("10^(10^6)"); //17,805,058, 0.34sec
+			detailedSolve("3^10^7<<3*9^9"); //1,276,807,624, 3.42sec   (canonically 8^9^9*3^10^7)
 
 //			timedSolve("2^2^24-1"); //225,782,649, 8.97sec
 //			timedSolve("2^2^20+1"); //7,601,041, 34.6sec
@@ -14,26 +14,55 @@ public class Main {
 
 		}
 
-		for(String s : args){
-			timedSolve(s);
+		if(args.length==1)
+			detailedSolve(args[0]);
+		else
+			bulkSolve(args);
+	}
+
+	public static void bulkSolve(String[] numStrs){
+		LazyCollatz.printProgress=false;
+		for(String s: numStrs){
+			System.out.print(s+" : ");
+			BigIntParse p = BigIntParse.parse(s);
+			NumberFormat nf = NumberFormat.getIntegerInstance();
+			BigInteger n = p.value;
+			long preShift = p.lShift;
+
+			long time = System.currentTimeMillis();
+
+			LazyCollatz.solve(n);
+			LazyCollatz.evenSteps+=preShift;
+
+			time=System.currentTimeMillis()-time;
+
+			long totalLen = LazyCollatz.oddSteps+LazyCollatz.evenSteps;
+
+			System.out.print("Path Len: "+nf.format(totalLen+1)+", ");
+			String evenStr = ""+(100*(double)LazyCollatz.evenSteps/totalLen);
+			evenStr=evenStr.substring(0,Math.min(6,evenStr.length()));
+			System.out.print("Even percentage: "+evenStr+", ");
+			System.out.println("Solve Time:"+time*0.001d+"s");
 		}
 	}
 
 
-	public static void timedSolve(String s){
+	public static void detailedSolve(String s){
+		LazyCollatz.printProgress=true;
+
 		System.out.println("\nNumber:\n"+s);
 		long startTime = System.currentTimeMillis();
 		BigIntParse n = BigIntParse.parse(s);
 		System.out.println("Parse time: "+(System.currentTimeMillis()-startTime)*0.001d+"s");
 
-		timedSolve(n);
+		detailedSolve(n);
 	}
 
-	public static void timedSolve(BigInteger n) {
-		timedSolve(new BigIntParse(n));
+	public static void detailedSolve(BigInteger n) {
+		detailedSolve(new BigIntParse(n));
 	}
 
-	public static void timedSolve(BigIntParse p){
+	public static void detailedSolve(BigIntParse p){
 		NumberFormat nf = NumberFormat.getIntegerInstance();
 
 		BigInteger n = p.value;
