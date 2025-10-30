@@ -5,17 +5,12 @@ import java.text.NumberFormat;
 public class Main {
 	public static void main(String[] args) {
 		if(args.length==0){
-			timedSolve("10^(10^6)");
-//			timedSolve("8^9^9*3^10^7");
+			timedSolve("10^(10^6)"); //17,805,058, 0.389sec
+			timedSolve("3^10^7<<3*9^9"); //1,276,807,624, 3.57sec   (canonically 8^9^9*3^10^7)
 
-//			timedSolve("(2^2^29-1)*2^(2^27*11)");
-			timedSolve("2^2^28-1");
-//			timedSolve("(2^2^28-1)<<(3*10^8)");
+//			timedSolve("2^2^24-1"); //225,782,649, 9.26sec
 
-//			timedSolve("12345<<(10^15)");
-//Path Len: 51
-//Even: 36    Odd: 14
-//			timedSolve("2^2^22-1");
+//			timedSolve("(2^2^30-1)<<(3*10^11)"); //514,448,571,769, 6572sec
 
 		}
 

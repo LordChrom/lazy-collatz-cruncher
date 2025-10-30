@@ -1,39 +1,40 @@
-import java.io.*;
 import java.math.BigInteger;
 import java.text.NumberFormat;
 
 public class LazyCollatz {
-	private boolean topInstance = false;
-	private BigInteger n;
+	public static long oddSteps, evenSteps;
+
 	//any number of collatz steps can be combined into a single function of the form (x*mult+add) >> shf
+	//the "add" factor can be found directly from the result of the sub calculation
 	//these constants represent those values for this particular sub operation
-	private BigInteger mult;
-	private BigInteger add;
+	private BigInteger n, mult;
 	private int shr;
 
-	public long oddSteps, evenSteps;
-
 	private int bitBudget; //number of valid bits for the sub operation. If we shift right too far, we'll need the higher bits of the parent up
+	private int lowerBytes; //number of bits trimmed off for lower operations
+	private boolean topInstance = false;
+
+
 
 	public LazyCollatz(BigInteger n, int bitBudget){
 		this.n=n;
-		this.mult = BigInteger.ONE;
-		this.add = BigInteger.ZERO;
-		this.shr = 0;
-		this.oddSteps = 0;
-		this.evenSteps = 0;
 		this.bitBudget=bitBudget;
+		mult = BigInteger.ONE;
+		shr = 0;
+		lowerBytes = 0;
 	}
 
-	//public facing method
     public static LazyCollatz solve(BigInteger num) {
 		LazyCollatz ret = new LazyCollatz(num,Integer.MAX_VALUE);
 		ret.topInstance=true;
+		ret.mult=BigInteger.ZERO; //dont need to keep track of upstream changes for top leve, saves lotsa perf
 		ret.topSolve();
 		return ret;
 	}
 
 	private void topSolve() {
+		oddSteps=evenSteps=0;
+
 		long statusUpdatePeriod = 15000;
 		long startTime = System.currentTimeMillis();
 		long reportTime = startTime+statusUpdatePeriod;
@@ -47,6 +48,7 @@ public class LazyCollatz {
 						+ NumberFormat.getIntegerInstance().format(n.bitLength())+
 						"  Steps: "+NumberFormat.getIntegerInstance().format(oddSteps+evenSteps));
 			}
+			bitBudget=Integer.MAX_VALUE;
 			partialSolve();
 		}
 	}
@@ -58,7 +60,7 @@ public class LazyCollatz {
 
 	//solves by choosing a strategy
 	private void partialSolve(){
-		if(n.equals(BigInteger.ZERO)){
+		if(n.equals(BigInteger.ZERO)){ //if lower bites are all zero, shift right for whole budget
 			shr+=bitBudget;
 			evenSteps+=bitBudget;
 			bitBudget=0;
@@ -74,17 +76,13 @@ public class LazyCollatz {
 			shr += x;
 			evenSteps += x;
 
+			if(bitBudget==0) return;
 		}
 
-		if(bitBudget==0)
-			return;
-
-
-		if(bitBudget>700 && n.bitLength()>1000) //tune this
+		if(bitBudget>700 && n.bitLength()>700) //tune this
 			partialSolveBig();
 		else
 			partialSolveSmall();
-
 	}
 
 	//solves by solving a subproblem large enough to need chopping
@@ -93,7 +91,11 @@ public class LazyCollatz {
 		while(subN.equals(BigInteger.ONE)){
 			if(n.equals(BigInteger.ONE))
 				break;
-			incorporate(3,1,0,1,0);
+
+			LazyCollatz manualStep = new LazyCollatz(BigInteger.ONE,0);
+			manualStep.mult=BigInteger.valueOf(3);
+			oddSteps++;
+			incorporate(manualStep);
 			subN = chop();
 		}
 
@@ -102,6 +104,7 @@ public class LazyCollatz {
 		incorporate(ret);
 	}
 
+	//constants for how many bits to use in the small solver
 	private static final int smallBitSize = 38;
 	private static final long smallBitMask = (1L<<smallBitSize)-1;
 
@@ -110,10 +113,8 @@ public class LazyCollatz {
 		while(!n.equals(BigInteger.ONE) && bitBudget>0) {
 			long x = n.longValue() & smallBitMask;
 
-			long add = 0;
-			long mult = 1;
+			long add = 0, mult = 1;
 			int shr = 0;
-			int oddSteps = 0;
 			int limit = Math.min(bitBudget, smallBitSize);
 			if(x==0)
 				shr=limit;
@@ -122,9 +123,8 @@ public class LazyCollatz {
 					x >>= 1;
 					shr++;
 				} else {
-					if (x == 1L)
-						if (topInstance)
-							break;
+					if (x == 1L && topInstance)
+						break;
 					x = x * 3 + 1;
 					mult *= 3;
 					add = add * 3 + (1L << shr);
@@ -132,7 +132,14 @@ public class LazyCollatz {
 				}
 			}
 
-			incorporate(mult, add, shr, oddSteps, shr);
+			evenSteps+=shr;
+
+			//shorter version of the incorporate function
+			BigInteger bigimul = BigInteger.valueOf(mult);
+			this.mult = this.mult.multiply(bigimul);
+			bitBudget-=shr;
+			this.shr += shr;
+			n = n.multiply(bigimul).add(BigInteger.valueOf(add)).shiftRight(shr);
 		}
 	}
 
@@ -140,59 +147,28 @@ public class LazyCollatz {
 	private BigInteger chop(){
 		byte[] bytes = n.toByteArray();
 		int len = bytes.length;
+		
+		lowerBytes =(int)(len*0.45f);
 
-		int partialLen; //Bunch of magic heuristics to determine how to scale the recursion
-		if(len<3000) {
-			partialLen = (int)Math.sqrt(len);
-		}else{
-			float k = ((float) Math.log(len))*.3f-0.15f;
-			k=Math.min(k,0.75f);
+		byte[] choppedBytes = new byte[lowerBytes +1];
+		byte[] remainingBytes = new byte[len- lowerBytes];
+		
+		System.arraycopy(bytes,bytes.length- lowerBytes,choppedBytes,1, lowerBytes);
+		System.arraycopy(bytes,0,remainingBytes,0,len- lowerBytes);
 
-			if(topInstance) {
-				if (len > 30000)
-					k *= 0.3f;
-				else k*=0.8f;
-			}
-
-			partialLen=(int)(len*k);
-		}
-
-		byte[] choppedBytes = new byte[partialLen+1];
-		System.arraycopy(bytes,bytes.length-partialLen,choppedBytes,1,partialLen);
 		choppedBytes[0]=0;
+
+		n = new BigInteger(remainingBytes);
 		return new BigInteger(choppedBytes);
 	}
 
 
-	//incorporates the operations from a recursive call into this instance
+	//incorporates the deferred operations from a recursive call into this instance
 	private void incorporate(LazyCollatz sub){
-		if(!topInstance) {
-			add = add.parallelMultiply(sub.mult).add(sub.add.shiftLeft(shr));
-			mult = mult.parallelMultiply(sub.mult);
-			shr += sub.shr;
-			bitBudget-=sub.shr;
+		mult = mult.parallelMultiply(sub.mult);
+		bitBudget-=sub.shr;
+		shr += sub.shr;
 
-		}
-		oddSteps+=sub.oddSteps;
-		evenSteps+=sub.evenSteps;
-		if(bitBudget>0)
-			n=n.parallelMultiply(sub.mult).add(sub.add).shiftRight(sub.shr);;
-	}
-
-	//same thing but it takes the parameters directly
-	private void incorporate(long imult, long iadd, int ishr, int odd, int even){
-		BigInteger bigimul = BigInteger.valueOf(imult);
-		BigInteger bigiadd = BigInteger.valueOf(iadd);
-		if(!topInstance) {
-			add = add.multiply(bigimul).add(bigiadd.shiftLeft(shr));
-			mult = mult.multiply(bigimul);
-			shr += ishr;
-			bitBudget-=ishr;
-		}
-		oddSteps+=odd;
-		evenSteps+=even;
-
-		if(bitBudget>0)
-			n = n.multiply(bigimul).add(bigiadd).shiftRight(ishr);
+		n=n.parallelMultiply(sub.mult).shiftLeft(lowerBytes *8-sub.shr).add(sub.n);
 	}
 }
