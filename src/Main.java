@@ -39,10 +39,8 @@ public class Main {
 			long totalLen = LazyCollatz.oddSteps+LazyCollatz.evenSteps;
 
 			System.out.print("Path Len: "+nf.format(totalLen+1)+", ");
-			String evenStr = ""+(100*(double)LazyCollatz.evenSteps/totalLen);
-			evenStr=evenStr.substring(0,Math.min(6,evenStr.length()));
-			System.out.print("Even percentage: "+evenStr+", ");
-			System.out.println("Solve Time:"+time*0.001d+"s");
+			System.out.print("Even percentage: "+maxCharStr((100*(double)LazyCollatz.evenSteps/totalLen),6)+", ");
+			System.out.println("Solve Time:"+maxCharStr(time*0.001d,6)+"s");
 		}
 	}
 
@@ -90,5 +88,11 @@ public class Main {
 		System.out.println("Even: "+nf.format(LazyCollatz.evenSteps)+"    Odd: "+nf.format(LazyCollatz.oddSteps));
 		System.out.println("Even percentage: "+(100*(double)LazyCollatz.evenSteps/totalLen));
 		System.out.println("Solve Time:"+(System.currentTimeMillis()-startTime)*0.001d+"s");
+	}
+
+	private static String maxCharStr(double d, int digits){
+		String ret = String.valueOf(d);
+		ret=ret.substring(0,Math.min(digits,ret.length()));
+		return ret;
 	}
 }
