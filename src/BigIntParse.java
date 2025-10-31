@@ -3,7 +3,7 @@ import java.util.ArrayList;
 
 public class BigIntParse {
 
-	enum TokenType {plus,minus,mult,pow,parenOpen,parenClosed,num, shl}
+	enum TokenType {plus,minus,mult,pow,parenOpen,parenClosed,num, shl,factorial}
 
 	TokenType type;
 	BigInteger value;
@@ -56,6 +56,9 @@ public class BigIntParse {
 						}
 					}
 					ret.add(new BigIntParse(TokenType.shl));
+					break;
+				case '!':
+					ret.add(new BigIntParse(TokenType.factorial));
 					break;
 				default:
 					if(Character.isDigit(c)) {
@@ -118,6 +121,17 @@ public class BigIntParse {
 			}
 		}
 
+		for (int i = tokens.size()-1; i>=1; i--) {
+			BigIntParse tok = tokens.get(i);
+			if(tok.type==TokenType.factorial){
+				tokens.remove(i);
+				BigIntParse L = tokens.get(i-1);
+				if(L.type!=TokenType.num)	throw new RuntimeException("Weird factorial args");
+
+				L.value=factorial(L.getValue());
+			}
+		}
+
 		for (int i = 1; i < tokens.size()-1;) {
 			BigIntParse tok = tokens.get(i);
 			if(tok.type==TokenType.mult){
@@ -165,7 +179,7 @@ public class BigIntParse {
 		if (tokens.size()!=1)
 			throw new RuntimeException("Expression not fully resolved, "+tokens.size()+" terms present");
 
-		return tokens.get(0);
+		return tokens.getFirst();
 	}
 
 	private static BigInteger bigIntPow(BigInteger l, BigInteger r){
@@ -186,6 +200,29 @@ public class BigIntParse {
 		}catch (ArithmeticException e){
 			throw new RuntimeException("power too big");
 		}
+	}
+
+	private static BigInteger factorial(BigInteger num){
+		return factorial(num,BigInteger.TWO);
+	}
+
+	private static BigInteger factorial(BigInteger upper,BigInteger lower) {
+		BigInteger diff = upper.subtract(lower);
+		if(diff.bitLength()<5) {
+			long u = upper.longValueExact();
+			long l = lower.longValueExact();
+			BigInteger ret = lower;
+
+			while (u > l) {
+				ret = ret.multiply(BigInteger.valueOf(u));
+				u--;
+			}
+			return ret;
+
+		}
+
+		BigInteger split = upper.add(lower).shiftRight(1);
+		return factorial(upper, split.add(BigInteger.ONE)).multiply(factorial(split, lower));
 	}
 
 	private BigInteger getValue(){

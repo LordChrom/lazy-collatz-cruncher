@@ -5,12 +5,16 @@ public class Main {
 	public static void main(String[] args) {
 		if(args.length==0){
 			detailedSolve("10^(10^6)"); //17,805,058, 0.34sec
-			detailedSolve("3^10^7<<3*9^9"); //1,276,807,624, 3.42sec   (canonically 8^9^9*3^10^7)
+//			detailedSolve("3^10^7<<3*9^9"); //1,276,807,624, 3.42sec   (canonically 8^9^9*3^10^7)
 
 //			timedSolve("2^2^24-1"); //225,782,649, 8.97sec
 //			timedSolve("2^2^20+1"); //7,601,041, 34.6sec
 
-//			timedSolve("(2^2^30-1)<<(3*10^11)"); //514,448,571,769, 6572sec
+//			detailedSolve("(2^2^30-1)<<(3*10^11)"); //514,448,571,769, 6572sec
+
+//			detailedSolve("(10^7)!"); //127487286, 4sec
+
+//			detailedSolve("10^300");
 
 		}
 
